@@ -2,28 +2,32 @@ package org.maxim.crud.repository.impl;
 
 
 import org.maxim.crud.model.Post;
-import org.maxim.crud.model.Writer;
 import org.maxim.crud.repository.PostRepository;
-import org.maxim.crud.service.JDBCUtils;
+import org.maxim.crud.Utilc.JDBCUtils;
 
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class JDBCPostRepository implements PostRepository {
 
-    private final static String GET_POST_BY_ID = "SELECT * FROM WHERE post_id = ?";
-    private final static String GET_POST_ALL = "SELECT * FROM post";
-    private final static String POST_SAVE = "INSERT INTO post(writer_id, post_name) VALUES (?, ?)";
-    private final static String POST_UPDATE = "UPDATE post set post_name = ? where post_id = ?";
-    private final static String DELETE_BY_ID = "DELETE FROM post WHERE post_id = ?";
+    private final static String GET_POST_BY_ID = "SELECT * FROM post " + " p " +
+                                    "LEFT JOIN label pl ON p.id = pl.id " +
+                                    "LEFT JOIN label l on pl.id = l.id " +
+                                    "WHERE p.PostStatus = 'ACTIVE' AND p.id = ? ";
+    private final static String GET_POST_ALL = "SELECT * FROM  post  " + " p " +
+                                            "LEFT JOIN label pl ON p.id = pl.id " +
+                                            "LEFT JOIN label l on pl.id = l.id " +
+                                            "WHERE PostStatus = 'ACTIVE' ";
+    private final static String POST_SAVE = "INSERT INTO post(writer_id, post) VALUES (?, ?)";
+    private final static String POST_UPDATE = "UPDATE + post " +
+            " SET  Content = ?, Created = ?, Updated = ?, PostStatus = ? WHERE id = ?";
+    private final static String DELETE_BY_ID = "UPDATE post " +
+            " SET PostStatus = ? WHERE id = ?";
 
     @Override
     public Post getById(Long id) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(GET_POST_BY_ID)){
+        try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(GET_POST_BY_ID)){
 
             preparedStatement.setLong( 1, id);
             ResultSet resultSet = preparedStatement.executeQuery();
@@ -40,25 +44,18 @@ public class JDBCPostRepository implements PostRepository {
     public List<Post> getAll() {
         List<Post> postsList = new ArrayList<>();
 
-        try(Statement statement = JDBCUtils.getConnectJDBC().createStatement()){
+        try(Statement statement = JDBCUtils.getConnection().createStatement()){
 
             ResultSet resultSet = statement.executeQuery(GET_POST_ALL);
-
             while(resultSet.next()) {
                 Post post = new Post();
-
-                post.setId(resultSet.getLong("post_id"));
-                post.setContent(resultSet.getString("content_name"));
-                post.setCreated(resultSet.getDate("created_name"));
-                post.setUpdated(resultSet.getDate("updated_name"));
-                post.setCreated(resultSet.getDate("crated_name"));
-
+                post.setId(resultSet.getLong("id"));
+                post.setContent(resultSet.getString("Content"));
+                post.setCreated(resultSet.getString("Created"));
+                post.setUpdated(resultSet.getString("Updated"));
                 postsList.add(post);
-
                 List<String> postList = new ArrayList<>();
-
                 postList.add(resultSet.getString("post_name"));
-
                 System.out.println("id: " + post.getId());
                 System.out.println("content: " + post.getContent());
                 System.out.println("created: " + post.getCreated());
@@ -74,24 +71,37 @@ public class JDBCPostRepository implements PostRepository {
 
     @Override
     public Post save(Post post) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(POST_SAVE)) {
-            preparedStatement.setString(1, post.getContent());
-            preparedStatement.setDate(2, post.getCreated());
-            preparedStatement.setDate(3, post.getUpdated());
-            preparedStatement.executeUpdate();
-
-        } catch (SQLException e) {
-            System.out.println("Error in Post save: " + e.getMessage());
+        try (Connection connection = JDBCUtils.getConnection();
+             PreparedStatement ps = JDBCUtils.getPreparedStatement(POST_SAVE)) {
+            ps.setString(1, post.getContent());
+            ps.setString(2, post.getCreated());
+            ps.setString(3, post.getUpdated());
+            ps.setString(4, post.getPostStatus().toString());
+            ps.setLong(5, 1);
+            ps.executeUpdate();
+            ResultSet generatedKeys = ps.getGeneratedKeys();
+            if(generatedKeys.next()){
+                Long id = generatedKeys.getLong(1);
+                post.setId(id);
+            }
+            try {
+                connection.commit();
+            } catch (SQLException throwables) {
+                connection.rollback();
+                throwables.printStackTrace();
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
         }
         return post;
     }
 
     @Override
     public Post update(Post post) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(POST_UPDATE)) {
+        try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(POST_UPDATE)) {
             preparedStatement.setString(1, post.getContent());
-            preparedStatement.setDate(2, post.getCreated());
-            preparedStatement.setDate(3, post.getUpdated());
+            preparedStatement.setString(2, post.getCreated());
+            preparedStatement.setString(3, post.getUpdated());
             preparedStatement.executeUpdate();
 
         } catch (SQLException e) {
@@ -102,7 +112,7 @@ public class JDBCPostRepository implements PostRepository {
 
     @Override
     public void deleteById(Long id) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(DELETE_BY_ID)) {
+        try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(DELETE_BY_ID)) {
             preparedStatement.setLong(1, id);
             preparedStatement.executeUpdate();
 
@@ -116,11 +126,10 @@ public class JDBCPostRepository implements PostRepository {
         try {
             while(resultSet.next()) {
                 post = new Post();
-                post.setId(resultSet.getLong("post_id"));
-                post.setContent(resultSet.getString("content_name"));
-                post.setCreated(resultSet.getDate("created_name"));
-                post.setUpdated(resultSet.getDate("updated_name"));
-                post.setCreated(resultSet.getDate("crated_name"));
+                post.setId(resultSet.getLong("id"));
+                post.setContent(resultSet.getString("Content"));
+                post.setCreated(resultSet.getString("Created_name"));
+                post.setUpdated(resultSet.getString("Updated_name"));
             }
         }catch (SQLException e) {
             System.out.println("IN convertResultSetPost error: " + e.getMessage());

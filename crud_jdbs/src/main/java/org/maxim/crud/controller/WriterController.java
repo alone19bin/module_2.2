@@ -6,58 +6,33 @@ import org.maxim.crud.model.Post;
 import org.maxim.crud.model.Writer;
 import org.maxim.crud.repository.WriterRepository;
 import org.maxim.crud.repository.impl.JDBCWriterRepository;
+import org.maxim.crud.service.WriterService;
 
 import java.util.List;
 
 @RequiredArgsConstructor
 public class WriterController {
-    private final WriterRepository writerRepository = new JDBCWriterRepository();
+    private WriterService service;
 
-
-
-    public Writer createWriter(String firstname, String lastname,
-                               List<Post> posts, WriterStatus writerStatus){
-
-        Writer newWriter = Writer.builder()
-                .firstName(firstname)
-                .lastName(lastname)
-                .posts(posts)
-                .writerStatus(writerStatus)
-                .build();
-
-        return writerRepository.save(newWriter);
+    private final WriterService writerService = new WriterService();
+    public Writer createWriter(String firsName, String lastName, List<Post> writerPosts){
+        Writer createdWriter = new Writer();
+        createdWriter.setFirstName(firsName);
+        createdWriter.setLastName(lastName);
+        createdWriter.setWriterStatus(WriterStatus.ACTIVE);
+        createdWriter.setPosts(writerPosts);
+        return writerService.save(createdWriter);
     }
-
-    public Writer getWriterById(Long id){
-        return writerRepository.getById(id);
+    public List<Writer> getAll(){
+        return writerService.getAll();
     }
-
-    public List<Writer> getAllWriters(){
-        return writerRepository.getAll();
+    public Writer getById(Long id){
+        return writerService.getById(id);
     }
-
-    public Writer updateWriter(Long id, String firstname, String lastname,
-                               List<Post> posts, WriterStatus writerStatus){
-
-        Writer updateWriter = Writer.builder()
-                .firstName(firstname)
-                .lastName(lastname)
-                .posts(posts)
-                .writerStatus(writerStatus)
-                .build();
-
-        updateWriter.setId(id);
-
-        return writerRepository.update(updateWriter);
+    public void update(Writer writer){
+        writerService.update(writer);
     }
-
-    public void deleteWriter(Long id){
-        writerRepository.deleteById(id);
-    }
-
-    public Writer addPostToWriter(Long writerId, Post post) {
-        Writer writer = writerRepository.getById(writerId);
-        writer.addPost(post);
-        return writerRepository.update(writer);
+    public void deleteById(Long id){
+        writerService.deleteById(id);
     }
 }
