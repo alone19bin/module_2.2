@@ -1,10 +1,8 @@
 package org.maxim.crud.repository.impl;
 
 import org.maxim.crud.model.Label;
-import org.maxim.crud.model.Post;
-import org.maxim.crud.model.Writer;
 import org.maxim.crud.repository.LabelRepository;
-import org.maxim.crud.service.JDBCUtils;
+import org.maxim.crud.Utilc.JDBCUtils;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -18,11 +16,11 @@ public class JDBCLabelRepository implements LabelRepository {
     private final static String GET_LABEL_ALL = "SELECT * FROM label";
     private final static String LABEL_SAVE = "INSERT INTO label(writer_id, post_name) VALUES (?, ?)";
     private final static String LABEL_UPDATE = "UPDATE label set label_name = ? where label_id = ?";
-    private final static String DELETE_BY_ID = "DELETE FROM label WHERE post_id = ?";
+    private final static String DELETE_BY_ID = "UPDATE label SET status = 'DELETED' WHERE id = ?;";
 
     @Override
     public Label getById(Long id) {
-            try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(GET_LABEL_BY_ID)){
+            try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(GET_LABEL_BY_ID)){
 
                 preparedStatement.setLong( 1, id);
                 ResultSet resultSet = preparedStatement.executeQuery();
@@ -39,7 +37,7 @@ public class JDBCLabelRepository implements LabelRepository {
     public List<Label> getAll() {
         List<Label> labelsList = new ArrayList<>();
 
-        try(Statement statement = JDBCUtils.getConnectJDBC().createStatement()){
+        try(Statement statement = JDBCUtils.getConnection().createStatement()){
 
             ResultSet resultSet = statement.executeQuery(GET_LABEL_ALL);
 
@@ -67,7 +65,7 @@ public class JDBCLabelRepository implements LabelRepository {
 
     @Override
     public Label save(Label label) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(LABEL_SAVE)) {
+        try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(LABEL_SAVE)) {
             preparedStatement.setString(1, label.getName());
             preparedStatement.executeUpdate();
 
@@ -79,7 +77,7 @@ public class JDBCLabelRepository implements LabelRepository {
 
     @Override
     public Label update(Label label) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(LABEL_UPDATE)) {
+        try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(LABEL_UPDATE)) {
             preparedStatement.setString(1, label.getName());
             preparedStatement.setLong(2, label.getId());
 
@@ -93,7 +91,7 @@ public class JDBCLabelRepository implements LabelRepository {
 
     @Override
     public void deleteById(Long id) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(DELETE_BY_ID)) {
+        try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(DELETE_BY_ID)) {
             preparedStatement.setLong(1, id);
             preparedStatement.executeUpdate();
 

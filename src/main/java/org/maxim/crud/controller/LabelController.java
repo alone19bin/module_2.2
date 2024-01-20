@@ -5,42 +5,34 @@ import org.maxim.crud.enums.LabelStatus;
 import org.maxim.crud.model.Label;
 import org.maxim.crud.repository.LabelRepository;
 import org.maxim.crud.repository.impl.JDBCLabelRepository;
+import org.maxim.crud.service.LabelService;
 
 import java.util.List;
 
 @RequiredArgsConstructor
 public class LabelController {
-    private final LabelRepository labelRepository = new JDBCLabelRepository();
+    private final LabelService labelService = new LabelService();
 
-    public Label createLabel(String name, LabelStatus labelStatus){
-        Label newLabel = Label.builder()
-                .name(name)
-                .labelStatus(labelStatus)
-                .build();
-
-        return labelRepository.save(newLabel);
+    public Label createLabel(String name) {
+        Label createdLabel = new Label();
+        createdLabel.setName(name);
+        createdLabel.setLabelStatus(LabelStatus.ACTIVE);
+        return labelService.save(createdLabel);
     }
 
-    public Label getLabelById(Long id){
-        return labelRepository.getById(id);
+    public List<Label> getAll() {
+        return labelService.getAll();
     }
 
-    public List<Label> getAllLabels(){
-        return labelRepository.getAll();
+    public Label getById(Long id) {
+        return labelService.getById(id);
     }
 
-    public Label updateLabel(Long id, String name, LabelStatus labelStatus){
-        Label updateLabel = Label.builder()
-                .name(name)
-                .labelStatus(labelStatus)
-                .build();
-
-        updateLabel.setId(id);
-
-        return labelRepository.update(updateLabel);
+    public void update(Label label) {
+        labelService.update(label);
     }
 
-    public void deleteLabel(Long id){
-        labelRepository.deleteById(id);
+    public void deleteById(Long id) {
+        labelService.deleteById(id);
     }
 }

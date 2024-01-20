@@ -1,97 +1,126 @@
 package org.maxim.crud.repository.impl;
 
 
+import org.maxim.crud.enums.LabelStatus;
+import org.maxim.crud.enums.PostStatus;
+import org.maxim.crud.model.Label;
 import org.maxim.crud.model.Post;
-import org.maxim.crud.model.Writer;
 import org.maxim.crud.repository.PostRepository;
-import org.maxim.crud.service.JDBCUtils;
+import org.maxim.crud.Utilc.JDBCUtils;
 
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class JDBCPostRepository implements PostRepository {
 
-    private final static String GET_POST_BY_ID = "SELECT * FROM WHERE post_id = ?";
-    private final static String GET_POST_ALL = "SELECT * FROM post";
-    private final static String POST_SAVE = "INSERT INTO post(writer_id, post_name) VALUES (?, ?)";
-    private final static String POST_UPDATE = "UPDATE post set post_name = ? where post_id = ?";
-    private final static String DELETE_BY_ID = "DELETE FROM post WHERE post_id = ?";
+    private final static String GET_POST_BY_ID = "SELECT * FROM post " + " p " +
+                                    "LEFT JOIN label pl ON p.id = pl.id " +
+                                    "LEFT JOIN label l on pl.id = l.id " +
+                                    "WHERE p.PostStatus = 'ACTIVE' AND p.id = ? ";
+    private final static String GET_POST_ALL = "SELECT * FROM  post  " + " p " +
+                                            "LEFT JOIN label pl ON p.id = pl.id " +
+                                            "LEFT JOIN label l on pl.id = l.id " +
+                                            "WHERE PostStatus = 'ACTIVE' ";
+    private final static String POST_SAVE = "INSERT INTO post(writer_id, post) VALUES (?, ?)";
+    private final static String POST_UPDATE = "UPDATE + post " +
+            " SET  Content = ?, Created = ?, Updated = ?, PostStatus = ? WHERE id = ?";
+    private final static String DELETE_BY_ID = "UPDATE post " +
+            " SET PostStatus = ? WHERE id = ?";
 
     @Override
-    public Post getById(Long id) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(GET_POST_BY_ID)){
-
-            preparedStatement.setLong( 1, id);
+    public Post getById(Long idl) {
+        try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(GET_POST_BY_ID)){
+            preparedStatement.setLong(1, idl);
             ResultSet resultSet = preparedStatement.executeQuery();
+            Map<Integer, Post> postMap = new HashMap<>();
 
-            return convertResultSetToPost(resultSet);
+            while (resultSet.next()) {
 
+                Long id = resultSet.getLong("p.id");
+                if (!postMap.containsKey(id)) {
+                    postMap.put(Math.toIntExact(id), mapToPost(resultSet));
+                }
+                String status = resultSet.getString("status");
+                if (status != null && status.equals("ACTIVE")) {
+                    List<Label> postLabels = postMap.get(id).getLabels();
+                    postLabels.add(mapToLabel(resultSet));
+                }
+            }
+
+            return postMap.get(idl);
         } catch (SQLException e) {
-            System.out.println("Error in Post getId" + e.getMessage());
-            return null;
+            throw new RuntimeException(e);
         }
     }
 
     @Override
     public List<Post> getAll() {
-        List<Post> postsList = new ArrayList<>();
+        List<Post> posts = new ArrayList<>();
+        try(PreparedStatement preparedStatement = JDBCUtils.getPreparedStatement(GET_POST_ALL)){
+            ResultSet resultSet = preparedStatement.executeQuery();
+            Map<Long, Post> postMap = new HashMap<>();
 
-        try(Statement statement = JDBCUtils.getConnectJDBC().createStatement()){
+            while (resultSet.next()) {
+                Long id = resultSet.getLong("p.id");
+                if (!postMap.containsKey(id)) {
+                    Post post = mapToPost(resultSet);
+                    postMap.put(id, post);
+                    posts.add(post);
+                }
 
-            ResultSet resultSet = statement.executeQuery(GET_POST_ALL);
-
-            while(resultSet.next()) {
-                Post post = new Post();
-
-                post.setId(resultSet.getLong("post_id"));
-                post.setContent(resultSet.getString("content_name"));
-                post.setCreated(resultSet.getDate("created_name"));
-                post.setUpdated(resultSet.getDate("updated_name"));
-                post.setCreated(resultSet.getDate("crated_name"));
-
-                postsList.add(post);
-
-                List<String> postList = new ArrayList<>();
-
-                postList.add(resultSet.getString("post_name"));
-
-                System.out.println("id: " + post.getId());
-                System.out.println("content: " + post.getContent());
-                System.out.println("created: " + post.getCreated());
-                System.out.println("updated: " + post.getUpdated());
-                System.out.println("created: " + post.getCreated());
+                String status = resultSet.getString("status");
+                if (status != null && status.equals("ACTIVE")) {
+                    List<Label> postLabels = postMap.get(id).getLabels();
+                    postLabels.add(mapToLabel(resultSet));
+                }
             }
-
         } catch (SQLException e) {
-            System.out.println("Error in Post getAll" + e.getMessage());
+            throw new RuntimeException(e.getSQLState());
         }
-        return postsList;
+        return posts;
     }
 
     @Override
     public Post save(Post post) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(POST_SAVE)) {
-            preparedStatement.setString(1, post.getContent());
-            preparedStatement.setDate(2, post.getCreated());
-            preparedStatement.setDate(3, post.getUpdated());
-            preparedStatement.executeUpdate();
+        try {
+            Connection connection = JDBCUtils.getConnection();
+            connection.setAutoCommit(false);
+            try (PreparedStatement preparedStatement = connection.prepareStatement(POST_SAVE, Statement.RETURN_GENERATED_KEYS)) {
+                preparedStatement.setString(1, post.getContent());
+                preparedStatement.setString(2, post.getCreated());
+                preparedStatement.setString(3, post.getUpdated());
+                preparedStatement.setString(4, post.getPostStatus().toString());
+                preparedStatement.setLong(5, post.getId());
+                preparedStatement.executeUpdate();
+                ResultSet generatedKeys = preparedStatement.getGeneratedKeys();
+                if (generatedKeys.next()) {
+                    Long id = generatedKeys.getLong(1);
+                    post.setId(id);
+                }
+            }
+            try {
+                connection.commit();
+            } catch (SQLException throwables) {
+                connection.rollback();
+                throwables.printStackTrace();
+            }
+        }
 
-        } catch (SQLException e) {
-            System.out.println("Error in Post save: " + e.getMessage());
+        catch (SQLException throwables) {
+            throwables.printStackTrace();
         }
         return post;
     }
 
     @Override
     public Post update(Post post) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(POST_UPDATE)) {
+        try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(POST_UPDATE)) {
             preparedStatement.setString(1, post.getContent());
-            preparedStatement.setDate(2, post.getCreated());
-            preparedStatement.setDate(3, post.getUpdated());
+            preparedStatement.setString(2, post.getCreated());
+            preparedStatement.setString(3, post.getUpdated());
             preparedStatement.executeUpdate();
 
         } catch (SQLException e) {
@@ -102,7 +131,7 @@ public class JDBCPostRepository implements PostRepository {
 
     @Override
     public void deleteById(Long id) {
-        try (PreparedStatement preparedStatement = JDBCUtils.getConnectJDBC().prepareStatement(DELETE_BY_ID)) {
+        try (PreparedStatement preparedStatement = JDBCUtils.getConnection().prepareStatement(DELETE_BY_ID)) {
             preparedStatement.setLong(1, id);
             preparedStatement.executeUpdate();
 
@@ -111,22 +140,33 @@ public class JDBCPostRepository implements PostRepository {
         }
     }
 
-    public Post convertResultSetToPost(ResultSet resultSet) {
-        Post post = null;
-        try {
-            while(resultSet.next()) {
-                post = new Post();
-                post.setId(resultSet.getLong("post_id"));
-                post.setContent(resultSet.getString("content_name"));
-                post.setCreated(resultSet.getDate("created_name"));
-                post.setUpdated(resultSet.getDate("updated_name"));
-                post.setCreated(resultSet.getDate("crated_name"));
-            }
-        }catch (SQLException e) {
-            System.out.println("IN convertResultSetPost error: " + e.getMessage());
-        }
+    private  Post mapToPost(ResultSet resultSet) throws SQLException {
+        List<Label> postLabels = new ArrayList<>();
+        Long id = resultSet.getLong("p.id");
+        String content = resultSet.getString("content");
+        String created = resultSet.getString("created");
+        String updated = resultSet.getString("updated");
+        String postStatus = resultSet.getString("post_status");
 
-        return post;
+        return Post.builder()
+                .id(id)
+                .content(content)
+                .created(created)
+                .updated(updated)
+                .postStatus(PostStatus.valueOf(postStatus))
+                .labels(postLabels)
+                .build();
+    }
+    private Label mapToLabel(ResultSet resultSet) throws SQLException {
+        Long labelId = resultSet.getLong("label_id");
+        String labelName = resultSet.getString("name");
+        String status = resultSet.getString("status");
+
+        return Label.builder()
+                .id(labelId)
+                .name(labelName)
+                .labelStatus(LabelStatus.valueOf(status))
+                .build();
     }
 }
 
